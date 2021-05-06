@@ -7,7 +7,13 @@ module.exports = {
       return next();
     }
 
-    s3.getObject({Key: this.getCacheKey(req)}, (err, result) => {
+    const s3Key = this.getCacheKey(req)
+
+    if (!s3Key) {
+      return next()
+    }
+
+    s3.getObject({Key: s3Key}, (err, result) => {
       if (!err && result) {
         const freshness = process.env.S3_CACHE_FRESHNESS || 604800000;
         const now = Date.now();
@@ -40,6 +46,15 @@ module.exports = {
   },
 
   getCacheKey: function(req) {
+    const url = new URL(req.prerender.url)
+
+    if (process.env.S3_CACHE_EXCLUDED_PATHNAMES) {
+      const excludedPathnames = process.env.S3_CACHE_EXCLUDED_PATHNAMES.split(',')
+      if (excludedPathnames.includes(url.pathname)) {
+        return
+      }
+    }
+
     let key = req.prerender.url;
     if (req.prerender.width) {
       key = `${key}-width-${req.prerender.width}`;
@@ -47,6 +62,7 @@ module.exports = {
     if (process.env.S3_PREFIX_KEY) {
       key = `${process.env.S3_PREFIX_KEY}/${key}`;
     }
+
     return key;
   },
 };
